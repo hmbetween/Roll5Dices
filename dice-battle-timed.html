@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Dice Battle - Advanced Tactics</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+        :root {
+            --bg: #111418;
+            --surface: #1c2028;
+            --surface2: #252b36;
+            --border: #2e3545;
+            --accent-blue: #4a9eff;
+            --accent-purple: #a78bfa;
+            --accent-green: #34d399;
+            --accent-amber: #fbbf24;
+            --accent-red: #f87171;
+            --accent-pink: #f472b6;
+            --text: #e2e8f0;
+            --text-muted: #64748b;
+            --text-dim: #94a3b8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 24px 16px;
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(74,158,255,0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(167,139,250,0.06) 0%, transparent 60%);
+        }
+
+        h1 {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            color: var(--accent-blue);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+        .subtitle { font-size: 12px; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 16px; }
+
+        /* ── 타이머 바 ── */
+        .timer-wrap {
+            width: 100%; max-width: 680px;
+            margin-bottom: 16px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .timer-track {
+            flex: 1; height: 6px;
+            background: var(--surface2);
+            border-radius: 3px; overflow: hidden;
+        }
+        .timer-fill {
+            height: 100%; width: 0%;
+            border-radius: 3px;
+            transition: width 0.1s linear, background 0.4s;
+            background: var(--accent-blue);
+        }
+        .timer-fill.warn  { background: var(--accent-amber); }
+        .timer-fill.danger{ background: var(--accent-red); }
+        .timer-text {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 15px; font-weight: 700;
+            color: var(--text-dim);
+            min-width: 36px; text-align: right;
+        }
+        .timer-text.warn   { color: var(--accent-amber); }
+        .timer-text.danger { color: var(--accent-red); }
+
+        /* ── Battle scene ── */
+        .battle-scene {
+            width: 100%; max-width: 680px;
+            display: grid; grid-template-columns: 1fr auto 1fr;
+            gap: 12px; align-items: stretch;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .unit { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .unit-icon { font-size: 36px; line-height: 1; }
+        .unit-name { font-family: 'Rajdhani', sans-serif; font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+        .vs { font-family: 'Rajdhani', sans-serif; font-size: 22px; font-weight: 700; color: var(--text-muted); align-self: center; }
+
+        .hp-label { font-size: 11px; color: var(--text-muted); letter-spacing: 1px; align-self: flex-start; width: 100%; }
+        .hp-bar { width: 100%; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+        .hp-inner { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+        .hp-inner.player { background: linear-gradient(90deg, #34d399, #4a9eff); }
+        .hp-inner.enemy  { background: linear-gradient(90deg, #f87171, #fbbf24); }
+        .hp-text { font-family: 'Rajdhani', sans-serif; font-size: 13px; color: var(--text-dim); }
+
+        .enemy-info { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+        .stat-pill {
+            font-size: 11px; padding: 3px 10px;
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 20px; color: var(--text-dim);
+        }
+        .antic-tag {
+            font-size: 12px; font-weight: 700; padding: 4px 12px;
+            border-radius: 6px; letter-spacing: 0.5px;
+        }
+        .antic-attack { background: rgba(248,113,113,0.15); color: var(--accent-red);   border: 1px solid rgba(248,113,113,0.3); }
+        .antic-heavy  { background: rgba(251,191,36,0.15);  color: var(--accent-amber); border: 1px solid rgba(251,191,36,0.3); }
+        .antic-guard  { background: rgba(52,211,153,0.15);  color: var(--accent-green); border: 1px solid rgba(52,211,153,0.3); }
+
+        /* ── Keep UI ── */
+        .keep-banner {
+            width: 100%; max-width: 680px;
+            display: none; align-items: center; justify-content: space-between;
+            background: rgba(167,139,250,0.08);
+            border: 1px solid rgba(167,139,250,0.3);
+            border-radius: 10px; padding: 10px 16px;
+            margin-bottom: 12px;
+        }
+        .keep-banner.visible { display: flex; }
+        .keep-label { font-size: 13px; color: var(--accent-purple); }
+        .keep-die {
+            width: 40px; height: 40px;
+            background: var(--accent-purple); color: white;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Rajdhani', sans-serif; font-size: 22px; font-weight: 700;
+            cursor: pointer; transition: transform 0.1s, opacity 0.2s; position: relative;
+        }
+        .keep-die:hover { transform: scale(1.08); }
+        .keep-die.used  { opacity: 0.3; cursor: default; transform: scale(0.85); }
+        .keep-die .keep-use-hint {
+            position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);
+            font-size: 10px; color: var(--text-muted); white-space: nowrap;
+        }
+        .keep-turns { font-size: 11px; color: var(--text-muted); }
+
+        /* ── Dice Pool ── */
+        .pool-label { font-size: 11px; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 8px; text-align: center; }
+        .dice-pool {
+            display: flex; justify-content: center; gap: 10px;
+            margin-bottom: 16px; min-height: 64px; flex-wrap: wrap;
+        }
+        .die {
+            width: 58px; height: 58px;
+            background: var(--surface2); border: 1.5px solid var(--border);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Rajdhani', sans-serif; font-size: 26px; font-weight: 700;
+            cursor: pointer; color: var(--text); user-select: none;
+            transition: border-color 0.15s, transform 0.1s, opacity 0.2s, background 0.15s;
+        }
+        .die:hover    { border-color: var(--accent-blue); transform: translateY(-2px); }
+        .die.selected { opacity: 0.25; transform: scale(0.8); pointer-events: none; border-color: var(--border); }
+
+        /* ── Slots ── */
+        .slots { display: flex; justify-content: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+        .slot {
+            width: 90px; min-height: 90px;
+            border: 1.5px dashed var(--border); border-radius: 12px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 4px; background: var(--surface); cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .slot:hover  { border-color: var(--accent-blue); background: var(--surface2); }
+        .slot.filled { border-style: solid; border-color: var(--accent-blue); background: rgba(74,158,255,0.07); }
+        .slot-type { font-size: 11px; color: var(--text-muted); letter-spacing: 0.5px; }
+        .slot-val  { font-family: 'Rajdhani', sans-serif; font-size: 30px; font-weight: 700; color: var(--accent-blue); }
+        .slot[data-slot="0"] .slot-type  { color: var(--accent-red); }
+        .slot[data-slot="0"].filled      { border-color: var(--accent-red);    background: rgba(248,113,113,0.07); }
+        .slot[data-slot="0"] .slot-val   { color: var(--accent-red); }
+        .slot[data-slot="1"] .slot-type  { color: var(--accent-green); }
+        .slot[data-slot="1"].filled      { border-color: var(--accent-green);  background: rgba(52,211,153,0.07); }
+        .slot[data-slot="1"] .slot-val   { color: var(--accent-green); }
+        .slot[data-slot="2"] .slot-type  { color: var(--accent-purple); }
+        .slot[data-slot="2"].filled      { border-color: var(--accent-purple); background: rgba(167,139,250,0.07); }
+        .slot[data-slot="2"] .slot-val   { color: var(--accent-purple); }
+
+        /* ── Buttons ── */
+        .btn-row { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
+        button {
+            padding: 10px 24px; font-size: 14px; font-family: 'Noto Sans KR', sans-serif;
+            font-weight: 700; cursor: pointer; border: none;
+            border-radius: 8px; letter-spacing: 0.5px; transition: opacity 0.15s, transform 0.1s;
+        }
+        button:active   { transform: scale(0.97); }
+        button:disabled { opacity: 0.35; cursor: default; }
+        #newRoundBtn { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+        #newRoundBtn:hover { border-color: var(--accent-green); color: var(--accent-green); }
+
+        /* ── Log ── */
+        .log-wrap { width: 100%; max-width: 680px; }
+        .log-header { font-size: 11px; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 6px; }
+        .log {
+            background: #0a0d12; border: 1px solid var(--border);
+            border-radius: 10px; padding: 12px 16px;
+            height: 170px; overflow-y: auto;
+            font-size: 12.5px; color: #6ee7b7;
+            font-family: 'Courier New', monospace; line-height: 1.7;
+        }
+        .log .sep       { color: var(--text-muted); }
+        .log .tag-triple  { color: var(--accent-amber); font-weight: bold; }
+        .log .tag-straight{ color: var(--accent-blue);  font-weight: bold; }
+        .log .tag-parity  { color: var(--accent-pink);  font-weight: bold; }
+        .log .tag-keep    { color: var(--accent-purple); }
+        .log .tag-dmg     { color: var(--accent-red); }
+        .log .tag-heal    { color: var(--accent-green); }
+        .log .tag-sys     { color: var(--text-muted); font-style: italic; }
+
+        /* ── Pattern legend ── */
+        .legend { width: 100%; max-width: 680px; margin-top: 16px; }
+        .legend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+        .legend-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 10px 12px;
+        }
+        .legend-title { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+        .legend-desc  { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+        .c-amber { color: var(--accent-amber); }
+        .c-blue  { color: var(--accent-blue); }
+        .c-pink  { color: var(--accent-pink); }
+        .c-gray  { color: var(--text-muted); }
+    </style>
+</head>
+<body>
+
+<h1>Dice Tactics</h1>
+<p class="subtitle">COUNTER · KEEP · PARITY</p>
+
+<!-- ── 타이머 바 ── -->
+<div class="timer-wrap" id="timerWrap" style="visibility:hidden;">
+    <div class="timer-track">
+        <div class="timer-fill" id="timerFill"></div>
+    </div>
+    <div class="timer-text" id="timerText">5.0</div>
+</div>
+
+<!-- Battle Scene -->
+<div class="battle-scene">
+    <div class="unit">
+        <div class="unit-icon">🛡️</div>
+        <div class="unit-name">플레이어</div>
+        <div class="hp-label">HP</div>
+        <div class="hp-bar"><div id="player-hp" class="hp-inner player" style="width:100%"></div></div>
+        <div class="hp-text" id="player-hp-text">100 / 100</div>
+    </div>
+    <div class="vs">VS</div>
+    <div class="unit">
+        <div class="unit-icon">👹</div>
+        <div class="unit-name">보스</div>
+        <div class="hp-label">HP</div>
+        <div class="hp-bar"><div id="enemy-hp" class="hp-inner enemy" style="width:100%"></div></div>
+        <div class="hp-text" id="enemy-hp-text">100 / 100</div>
+        <div class="enemy-info">
+            <div class="stat-pill">ATK <span id="e-atk">12</span></div>
+            <div id="enemy-antic" class="antic-tag antic-attack">전조: -</div>
+        </div>
+    </div>
+</div>
+
+<!-- Keep Banner -->
+<div class="keep-banner" id="keepBanner">
+    <div>
+        <div class="keep-label">🔮 보관된 주사위</div>
+        <div class="keep-turns" id="keepTurnsText"></div>
+    </div>
+    <div style="position:relative; padding-bottom:22px;">
+        <div class="keep-die" id="keepDieEl" onclick="useKeepDie()">
+            <span id="keepVal">0</span>
+            <span class="keep-use-hint">클릭해서 슬롯에 배치</span>
+        </div>
+    </div>
+</div>
+
+<!-- Dice Pool -->
+<p class="pool-label">DICE POOL — 주사위를 클릭해 슬롯에 배치</p>
+<div class="dice-pool" id="dicePool"></div>
+
+<!-- Slots -->
+<div class="slots">
+    <div class="slot" data-slot="0" id="slot-0" onclick="deselectDice(0)">
+        <span class="slot-type">⚔ 공격</span>
+    </div>
+    <div class="slot" data-slot="1" id="slot-1" onclick="deselectDice(1)">
+        <span class="slot-type">🛡 방어</span>
+    </div>
+    <div class="slot" data-slot="2" id="slot-2" onclick="deselectDice(2)">
+        <span class="slot-type">✦ 특수</span>
+    </div>
+</div>
+
+<div class="btn-row">
+    <button id="newRoundBtn" onclick="initTurn()">새 라운드 🎲</button>
+</div>
+
+<!-- Log -->
+<div class="log-wrap">
+    <div class="log-header">BATTLE LOG</div>
+    <div class="log" id="battleLog">
+        <span class="tag-sys">> 게임 시작. 새 라운드 버튼을 눌러주세요.</span>
+    </div>
+</div>
+
+<!-- Pattern Legend -->
+<div class="legend" style="margin-top:20px;">
+    <div class="log-header" style="margin-bottom:8px;">패턴 가이드</div>
+    <div class="legend-grid">
+        <div class="legend-card">
+            <div class="legend-title c-amber">⚡ TRIPLE</div>
+            <div class="legend-desc">3개 같은 눈 → 적 공격 완전 무효 + (적ATK × 눈수) 카운터 반격</div>
+        </div>
+        <div class="legend-card">
+            <div class="legend-title c-blue">↗ STRAIGHT</div>
+            <div class="legend-desc">연속 3숫자 → 일반공격 100% 회피 / 강공격 50% 경감 + 특수칸 눈을 다음 턴 킵</div>
+        </div>
+        <div class="legend-card">
+            <div class="legend-title c-pink">◈ 홀/짝 트리플</div>
+            <div class="legend-desc">홀홀홀 or 짝짝짝 → 특수칸 숫자만큼 HP 회복</div>
+        </div>
+        <div class="legend-card">
+            <div class="legend-title c-gray">일반</div>
+            <div class="legend-desc">공격칸×2 공격 / 방어칸으로 피해 경감 / 특수칸은 미사용</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    /* ── 상태 ── */
+    let playerHP = 100, enemyHP = 100;
+    const MAX_HP = 100;
+    let pool = [];
+    let selectedIndices = [null, null, null]; // 슬롯0=공격, 슬롯1=방어, 슬롯2=특수
+    let enemyAction = "", enemyAtk = 12;
+
+    // 킵 시스템
+    let keptValue = 0;
+    let keepUsed = false;
+    let keepTurnsLeft = 0;
+    let keepInSlot = null;
+
+    // 타이머
+    const TIME_LIMIT = 10000; // 10초
+    let timerInterval = null;
+    let turnActive = false;  // 타이머 진행 중 여부
+
+    /* ── 타이머 ── */
+    function startTimer() {
+        const fill = document.getElementById('timerFill');
+        const text = document.getElementById('timerText');
+        const wrap = document.getElementById('timerWrap');
+
+        wrap.style.visibility = 'visible';
+        fill.style.width = '100%';
+        fill.className = 'timer-fill';
+        text.className = 'timer-text';
+
+        const startTime = Date.now();
+        clearInterval(timerInterval);
+
+        timerInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const remaining = Math.max(0, TIME_LIMIT - elapsed);
+            const pct = (remaining / TIME_LIMIT) * 100;
+            const sec = (remaining / 1000).toFixed(1);
+
+            fill.style.width = pct + '%';
+            text.innerText = sec;
+
+            // 색상 단계
+            if (pct <= 25) {
+                fill.className = 'timer-fill danger';
+                text.className = 'timer-text danger';
+            } else if (pct <= 50) {
+                fill.className = 'timer-fill warn';
+                text.className = 'timer-text warn';
+            } else {
+                fill.className = 'timer-fill';
+                text.className = 'timer-text';
+            }
+
+            if (remaining <= 0) {
+                stopTimer();
+                // 시간 초과 → 빈 슬롯은 0으로 강제 처리 후 실행
+                addLog(`<span class="tag-sys">> ⏰ 시간 초과! 미완성 슬롯은 0으로 처리됩니다.</span>`);
+                executeTurn(true); // timeOut=true
+            }
+        }, 50);
+    }
+
+    function stopTimer() {
+        clearInterval(timerInterval);
+        turnActive = false;
+        const wrap = document.getElementById('timerWrap');
+        wrap.style.visibility = 'hidden';
+        document.getElementById('timerFill').style.width = '0%';
+    }
+
+    /* ── 초기화 ── */
+    function initTurn() {
+        if (turnActive) return; // 타이머 진행 중엔 새 라운드 차단
+
+        enemyAction = ["공격", "강공", "방어"][Math.floor(Math.random() * 3)];
+        enemyAtk = enemyAction === "강공" ? 25 : (enemyAction === "공격" ? 12 : 0);
+
+        document.getElementById('e-atk').innerText = enemyAtk;
+        const anticEl = document.getElementById('enemy-antic');
+        anticEl.innerText = `전조: ${enemyAction}`;
+        anticEl.className = 'antic-tag ' + (enemyAction === '강공' ? 'antic-heavy' : enemyAction === '방어' ? 'antic-guard' : 'antic-attack');
+
+        pool = Array.from({length: 5}, () => Math.floor(Math.random() * 6) + 1);
+        selectedIndices = [null, null, null];
+        keepUsed = false;
+        keepInSlot = null;
+
+        // 킵 유효기간 감소
+        if (keepTurnsLeft > 0) {
+            keepTurnsLeft--;
+            if (keepTurnsLeft === 0) {
+                addLog(`<span class="tag-sys">> [킵 만료] 보관된 주사위(${keptValue})가 사라졌습니다.</span>`);
+                keptValue = 0;
+            }
+        }
+
+        render();
+        updateKeepUI();
+        addLog(`<span class="sep">> ──── 새 라운드 (적: ${enemyAction}, ATK ${enemyAtk}) ────</span>`);
+
+        // 타이머 시작
+        turnActive = true;
+        document.getElementById('newRoundBtn').disabled = true;
+        startTimer();
+    }
+
+    /* ── 주사위 선택 ── */
+    function selectDice(pIdx) {
+        if (!turnActive) return; // 타이머 없을 때 클릭 차단
+        const sIdx = selectedIndices.indexOf(null);
+        if (sIdx !== -1 && !selectedIndices.includes(pIdx)) {
+            selectedIndices[sIdx] = pIdx;
+            render();
+            // 3개 다 채워졌으면 즉시 실행
+            if (!selectedIndices.includes(null)) {
+                stopTimer();
+                executeTurn(false);
+            }
+        }
+    }
+
+    function deselectDice(sIdx) {
+        if (!turnActive) return;
+        if (selectedIndices[sIdx] !== null) {
+            selectedIndices[sIdx] = null;
+            render();
+        }
+    }
+
+    /* ── 킵 주사위 사용 ── */
+    function useKeepDie() {
+        if (!turnActive || keepUsed || keptValue === 0) return;
+        const emptySlot = selectedIndices.indexOf(null);
+        if (emptySlot === -1) {
+            addLog(`<span class="tag-sys">> 슬롯이 모두 채워져 있습니다. 슬롯을 클릭해 비운 뒤 킵을 사용하세요.</span>`);
+            return;
+        }
+        keepUsed = true;
+        keepInSlot = emptySlot;
+        selectedIndices[emptySlot] = -999;
+        render();
+        updateKeepUI();
+        addLog(`<span class="tag-keep">> 킵 주사위(${keptValue})를 슬롯 ${['공격','방어','특수'][emptySlot]}에 배치했습니다.</span>`);
+
+        // 킵 배치로 3개 채워졌으면 즉시 실행
+        if (!selectedIndices.includes(null)) {
+            stopTimer();
+            executeTurn(false);
+        }
+    }
+
+    /* ── 렌더 ── */
+    function render() {
+        const poolEl = document.getElementById('dicePool');
+        poolEl.innerHTML = '';
+        pool.forEach((val, idx) => {
+            const div = document.createElement('div');
+            div.className = `die ${selectedIndices.includes(idx) ? 'selected' : ''}`;
+            div.innerText = val;
+            div.onclick = () => selectDice(idx);
+            poolEl.appendChild(div);
+        });
+
+        const slotNames = ['⚔ 공격', '🛡 방어', '✦ 특수'];
+        for (let i = 0; i < 3; i++) {
+            const slot = document.getElementById(`slot-${i}`);
+            const pIdx = selectedIndices[i];
+            if (pIdx === -999) {
+                slot.className = 'slot filled';
+                slot.innerHTML = `<span class="slot-val" style="color:var(--accent-purple)">${keptValue}</span><span class="slot-type" style="color:var(--accent-purple)">🔮 킵</span>`;
+            } else if (pIdx !== null) {
+                slot.className = 'slot filled';
+                slot.innerHTML = `<span class="slot-val">${pool[pIdx]}</span><span class="slot-type">${slotNames[i]}</span>`;
+            } else {
+                slot.className = 'slot';
+                slot.innerHTML = `<span class="slot-type">${slotNames[i]}</span>`;
+            }
+        }
+    }
+
+    /* ── 킵 UI ── */
+    function updateKeepUI() {
+        const banner = document.getElementById('keepBanner');
+        const dieEl  = document.getElementById('keepDieEl');
+        if (keptValue > 0) {
+            banner.classList.add('visible');
+            document.getElementById('keepVal').innerText = keptValue;
+            document.getElementById('keepTurnsText').innerText = `${keepTurnsLeft}턴 후 만료`;
+            dieEl.classList.toggle('used', keepUsed);
+        } else {
+            banner.classList.remove('visible');
+        }
+    }
+
+    /* ── 턴 실행 ── */
+    // timeOut=true이면 빈 슬롯을 0으로 강제 채워서 실행
+    function executeTurn(timeOut) {
+        // 타임아웃: 빈 슬롯을 -998(0값 마커)로 채움
+        if (timeOut) {
+            for (let i = 0; i < 3; i++) {
+                if (selectedIndices[i] === null) selectedIndices[i] = -998;
+            }
+        }
+
+        // 슬롯 값 추출
+        // -999 = 킵 주사위(keptValue), -998 = 타임아웃 빈칸(0), 그 외 = pool 인덱스
+        const v = selectedIndices.map(i => {
+            if (i === -999) return keptValue;
+            if (i === -998) return 0;
+            return pool[i];
+        });
+        const [atk, def, spc] = v;
+
+        const sorted = [...v].sort((a,b)=>a-b);
+        const isTriple   = v[0] === v[1] && v[1] === v[2];
+        const isStraight = sorted[0] > 0 && sorted[1] === sorted[0]+1 && sorted[2] === sorted[1]+1;
+        const isParity   = !isTriple && !isStraight &&
+                           !v.includes(0) &&
+                           (v.every(x => x % 2 === 1) || v.every(x => x % 2 === 0));
+
+        let finalMyDmg = 0;
+        let finalEnDmg = 0;
+        let healAmt = 0;
+
+        /* ── TRIPLE ── */
+        if (isTriple) {
+            const counterDmg = enemyAtk * atk;
+            finalEnDmg = 0;
+            finalMyDmg = counterDmg;
+            addLog(`<span class="tag-triple">> ⚡ TRIPLE! 적의 ${enemyAction} 완전 무력화!</span>`);
+            addLog(`<span class="tag-triple">>    카운터: ATK ${enemyAtk} × 눈 ${atk} = <b>${counterDmg}</b> 피해</span>`);
+        }
+
+        /* ── STRAIGHT ── */
+        else if (isStraight) {
+            if (enemyAction === '공격') {
+                finalEnDmg = 0;
+                addLog(`<span class="tag-straight">> ↗ STRAIGHT! 일반공격 완전 회피!</span>`);
+            } else if (enemyAction === '강공') {
+                finalEnDmg = Math.floor(enemyAtk * 0.5);
+                addLog(`<span class="tag-straight">> ↗ STRAIGHT! 강공격 50% 경감 → ${finalEnDmg} 피해</span>`);
+            } else {
+                finalEnDmg = 0;
+                addLog(`<span class="tag-straight">> ↗ STRAIGHT! (적이 방어 중, 피해 없음)</span>`);
+            }
+            finalMyDmg = Math.max(0, atk * 2 - (enemyAction === '방어' ? 15 : 0));
+
+            keptValue = spc;
+            keepTurnsLeft = 2;
+            keepUsed = false;
+            keepInSlot = null;
+            addLog(`<span class="tag-keep">>    특수칸 주사위 [${spc}]를 다음 턴 킵으로 보관합니다.</span>`);
+        }
+
+        /* ── 홀/짝 PARITY HEAL ── */
+        else if (isParity) {
+            healAmt = spc;
+            finalMyDmg = Math.max(0, atk * 2 - (enemyAction === '방어' ? 15 : 0));
+            finalEnDmg = Math.max(0, enemyAtk - def);
+            addLog(`<span class="tag-parity">> ◈ PARITY! ${v.every(x=>x%2===1)?'홀홀홀':'짝짝짝'} 달성!</span>`);
+            addLog(`<span class="tag-heal">>    특수칸 [${spc}] → HP ${healAmt} 회복!</span>`);
+        }
+
+        /* ── 일반 ── */
+        else {
+            finalMyDmg = Math.max(0, atk * 2 - (enemyAction === '방어' ? 15 : 0));
+            finalEnDmg = Math.max(0, enemyAtk - def);
+        }
+
+        // 킵 주사위 소멸 (사용된 경우)
+        if (keepUsed && !isStraight) {
+            addLog(`<span class="tag-keep">>    킵 주사위(${keptValue}) 소진됨.</span>`);
+            keptValue = 0;
+            keepTurnsLeft = 0;
+            keepUsed = false;
+            keepInSlot = null;
+        }
+
+        // HP 적용
+        playerHP = Math.min(MAX_HP, Math.max(0, playerHP - finalEnDmg + healAmt));
+        enemyHP  = Math.max(0, enemyHP - finalMyDmg);
+
+        if (!(isTriple || isStraight || isParity)) {
+            addLog(`> 공격 ${atk}×2=${atk*2}, 방어 ${def}, 특수 —`);
+        }
+        addLog(`<span class="tag-dmg">>    결과: 내 HP +${healAmt} -${finalEnDmg} / 적 HP -${finalMyDmg}</span>`);
+
+        if (playerHP <= 0) addLog(`<span class="tag-dmg">> 💀 패배...</span>`);
+        if (enemyHP  <= 0) addLog(`<span class="tag-heal">> ✨ 승리!</span>`);
+
+        updateHpUI();
+        updateKeepUI();
+
+        // 새 라운드 버튼 복구
+        document.getElementById('newRoundBtn').disabled = false;
+    }
+
+    /* ── UI 갱신 ── */
+    function updateHpUI() {
+        document.getElementById('player-hp').style.width      = (playerHP / MAX_HP * 100) + '%';
+        document.getElementById('enemy-hp').style.width       = (enemyHP  / MAX_HP * 100) + '%';
+        document.getElementById('player-hp-text').innerText   = `${playerHP} / ${MAX_HP}`;
+        document.getElementById('enemy-hp-text').innerText    = `${enemyHP}  / ${MAX_HP}`;
+    }
+
+    function addLog(html) {
+        const log = document.getElementById('battleLog');
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+    }
+</script>
+</body>
+</html>
