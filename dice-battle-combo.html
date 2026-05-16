@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Dice Action Prototype - Combo Master</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; background: #121212; color: #e0e0e0; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; user-select: none; }
+        .game-container { max-width: 650px; width: 100%; background: #1e1e1e; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center; position: relative; }
+        
+        /* 상단 타이머 바 */
+        .timer-container { width: 100%; height: 8px; background: #333; border-radius: 4px; margin-bottom: 20px; overflow: hidden; }
+        .timer-bar { width: 100%; height: 100%; background: #e74c3c; width: 0%; transition: width 0.1s linear; }
+
+        /* 배틀 스테이지 (HP 바) */
+        .battle-stage { display: flex; justify-content: space-between; background: #2d2d2d; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
+        .hp-bar-container { width: 45%; text-align: left; }
+        .hp-bar { width: 100%; height: 12px; background: #444; border-radius: 10px; overflow: hidden; margin-top: 5px; }
+        .hp-fill { height: 100%; transition: width 0.2s; }
+        #playerHpFill { background: #2ecc71; width: 100%; }
+        #enemyHpFill { background: #e74c3c; width: 100%; }
+
+        /* 보스의 이번 턴 예고 */
+        .enemy-intent-box { background: #2c3e50; border: 2px solid #34495e; border-radius: 10px; padding: 12px; margin-bottom: 15px; font-size: 15px; }
+        .intent-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-weight: bold; margin-left: 5px; }
+        .intent-attack { background: #c0392b; color: white; }
+        .intent-defend { background: #2980b9; color: white; }
+
+        /* 중앙 전투 연출 디스플레이 */
+        .clash-display { height: 50px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; color: #f1c40f; margin-bottom: 15px; background: #151515; border-radius: 8px; border: 1px solid #222; }
+
+        /* 나의 3슬롯 조립 구역 */
+        .player-slots-area { background: #252525; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
+        .slots { display: flex; justify-content: center; gap: 15px; margin-top: 8px; }
+        .slot { width: 75px; height: 80px; border: 2px dashed #555; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #1a1a1a; cursor: pointer; transition: transform 0.1s; }
+        .slot:hover { transform: scale(1.03); }
+        .slot-icon { font-size: 24px; }
+        .slot-num { font-size: 16px; font-weight: bold; margin-top: 2px; }
+        
+        /* 굴러간 5개 주사위 풀 */
+        .dice-pool-area { background: #2a2a2a; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
+        .dice-pool { display: flex; justify-content: center; gap: 12px; margin-top: 8px; min-height: 75px; align-items: center; }
+        
+        /* 개별 주사위 스타일 */
+        .dice { width: 65px; height: 65px; background: #fff; color: #111; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3); transition: all 0.15s; }
+        .dice:hover { transform: translateY(-4px); box-shadow: 0 6px 12px rgba(0,0,0,0.5); }
+        .dice.selected { opacity: 0.3; pointer-events: none; transform: scale(0.9); }
+        .dice-공격 { background: #ffeaea; border: 3px solid #e74c3c; color: #c0392b; }
+        .dice-방어 { background: #eaf2ff; border: 3px solid #3498db; color: #2980b9; }
+        .dice-특수 { background: #fef8eb; border: 3px solid #f1c40f; color: #d35400; }
+        .dice-icon { font-size: 20px; }
+        .dice-val { font-size: 18px; margin-top: -2px; }
+
+        /* 하단 컨트롤 및 로그 */
+        .control-panel { display: flex; gap: 10px; margin-bottom: 15px; }
+        button { flex: 1; padding: 12px; font-size: 15px; font-weight: bold; cursor: pointer; border: none; border-radius: 6px; background: #2ecc71; color: white; transition: background 0.2s; }
+        button:hover { background: #27ae60; }
+        button:disabled { background: #444; color: #777; cursor: not-allowed; }
+        
+        .log-panel { background: #111; border-radius: 8px; padding: 12px; height: 110px; overflow-y: auto; text-align: left; font-size: 13px; line-height: 1.6; border: 1px solid #333; }
+        .log-entry { margin-bottom: 4px; border-left: 3px solid #555; padding-left: 8px; }
+        .log-p-turn { border-color: #2ecc71; color: #2ecc71; font-weight: bold; }
+        .log-e-turn { border-color: #e74c3c; color: #e74c3c; }
+        .log-system { border-color: #f1c40f; color: #f1c40f; }
+        .log-combo { border-color: #9b59b6; color: #9b59b6; font-weight: bold; }
+
+        /* ══════════════════════════════════
+           족보 패널
+        ══════════════════════════════════ */
+        .combo-ref {
+            max-width: 650px;
+            width: 100%;
+            margin-top: 18px;
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 15px;
+            padding: 18px 20px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+        }
+        .combo-ref-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #888;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .combo-ref-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #2a2a2a;
+        }
+
+        /* 1층: 문양 콤보 */
+        .combo-section-label {
+            font-size: 11px;
+            color: #555;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            margin-top: 4px;
+        }
+        .combo-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .combo-card {
+            background: #222;
+            border: 1px solid #2e2e2e;
+            border-radius: 10px;
+            padding: 10px 12px;
+            text-align: left;
+            position: relative;
+            transition: border-color 0.2s;
+        }
+        .combo-card.highlight {
+            border-color: #3d3200;
+            background: #1f1c00;
+        }
+        .combo-card-name {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .combo-card-dice {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+        }
+        .pip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px; height: 26px;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .pip-atk  { background: #3a1010; color: #e74c3c; border: 1px solid #5a1a1a; }
+        .pip-def  { background: #0e1e35; color: #3498db; border: 1px solid #1a3555; }
+        .pip-spc  { background: #2a2000; color: #f1c40f; border: 1px solid #4a3800; }
+        .pip-any  { background: #252525; color: #aaa;    border: 1px solid #333; }
+        .pip-fail { background: #1c1c1c; color: #555;    border: 1px solid #2a2a2a; }
+
+        .combo-effect {
+            font-size: 11.5px;
+            color: #999;
+            line-height: 1.55;
+        }
+        .combo-effect strong { color: #ccc; }
+        .badge-multi {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 1px 6px;
+            border-radius: 4px;
+            margin-left: 4px;
+            vertical-align: middle;
+        }
+        .badge-atk  { background: #5c1818; color: #e74c3c; }
+        .badge-def  { background: #0d2040; color: #3498db; }
+        .badge-spc  { background: #2a1e00; color: #f1c40f; }
+        .badge-jackpot { background: #2a0040; color: #9b59b6; }
+        .badge-dmg2  { background: #3c1010; color: #ff6b6b; }
+        .badge-stun  { background: #1a0030; color: #c39bd3; }
+        .badge-grd2  { background: #0a1a30; color: #5dade2; }
+
+        /* 2층: 숫자 패턴 */
+        .num-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .num-card {
+            background: #1e1a2a;
+            border: 1px solid #2e2840;
+            border-radius: 10px;
+            padding: 10px 12px;
+            text-align: left;
+        }
+        .num-example {
+            display: flex;
+            gap: 4px;
+            margin: 5px 0;
+        }
+        .pip-n {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px; height: 26px;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: bold;
+            background: #2a2240;
+            color: #c39bd3;
+            border: 1px solid #3d3360;
+        }
+        .pip-n.jackpot { background: #2a0040; color: #a87ee0; border-color: #5a2090; }
+
+        /* 중첩 표 */
+        .overlap-section { margin-top: 14px; }
+        .overlap-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .overlap-table th {
+            text-align: left;
+            color: #555;
+            font-weight: normal;
+            padding: 4px 8px;
+            border-bottom: 1px solid #252525;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+        }
+        .overlap-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #1e1e1e;
+            color: #bbb;
+            vertical-align: middle;
+        }
+        .overlap-table tr:last-child td { border-bottom: none; }
+        .overlap-table tr:hover td { background: #1e1e1e; }
+        .mult {
+            font-family: monospace;
+            font-size: 13px;
+            font-weight: bold;
+            color: #f1c40f;
+        }
+        .rank-s  { color: #ff6b6b; font-weight: bold; }
+        .rank-a  { color: #f1c40f; font-weight: bold; }
+        .rank-b  { color: #2ecc71; }
+        .rank-c  { color: #888; }
+
+        /* 특수 효과 공식 */
+        .formula-box {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 12px;
+            color: #888;
+            text-align: left;
+            margin-top: 14px;
+            line-height: 1.9;
+        }
+        .formula-box code {
+            font-family: monospace;
+            color: #a8d8a8;
+            background: #0d1a0d;
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+        .formula-label { color: #555; font-size: 10px; letter-spacing: 1px; margin-bottom: 6px; text-transform: uppercase; }
+
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <h2 style="margin: 5px 0 10px 0;">Dice Action Combo (프로토타입)</h2>
+    
+    <div class="timer-container">
+        <div id="timerBar" class="timer-bar"></div>
+    </div>
+
+    <div class="battle-stage">
+        <div class="hp-bar-container">
+            <div><strong>플레이어</strong> <span id="playerHpText">HP: 100/100</span></div>
+            <div class="hp-bar"><div id="playerHpFill" class="hp-fill"></div></div>
+        </div>
+        <div class="hp-bar-container">
+            <div><strong>몬스터</strong> <span id="enemyHpText">HP: 120/120</span></div>
+            <div class="hp-bar"><div id="enemyHpFill" class="hp-fill"></div></div>
+        </div>
+    </div>
+
+    <div class="enemy-intent-box" id="enemyIntentBox">
+        보스의 의도: <span class="intent-badge intent-attack">공격 준비중</span>
+    </div>
+
+    <div class="clash-display" id="clashDisplay">
+        READY...
+    </div>
+
+    <div class="player-slots-area">
+        <span style="font-size: 13px; color: #aaa;">📥 아래 주사위를 클릭해 3칸의 스킬 콤보를 완성하세요! (클릭 시 취소)</span>
+        <div class="slots">
+            <div class="slot" onclick="clearSlot(0)" id="slot0"><span class="slot-icon">?</span><span class="slot-num">-</span></div>
+            <div class="slot" onclick="clearSlot(1)" id="slot1"><span class="slot-icon">?</span><span class="slot-num">-</span></div>
+            <div class="slot" onclick="clearSlot(2)" id="slot2"><span class="slot-icon">?</span><span class="slot-num">-</span></div>
+        </div>
+    </div>
+
+    <div class="dice-pool-area">
+        <strong style="color: #48dbfb;">🎲 보유 주사위 (5개 자동 굴림)</strong>
+        <div class="dice-pool" id="dicePool"></div>
+    </div>
+
+    <div class="control-panel">
+        <button id="actionBtn" onclick="startNewTurn()">🔄 다음 턴 시작 (주사위 롤)</button>
+    </div>
+    
+    <div class="log-panel" id="logPanel">
+        <div class="log-entry log-system">전투가 시작되었습니다. '다음 턴 시작' 버튼을 누르면 4초의 타임어택이 시작됩니다!</div>
+    </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     콤보 족보 레퍼런스 패널
+════════════════════════════════════════ -->
+<div class="combo-ref">
+    <div class="combo-ref-title">📖 콤보 족보</div>
+
+    <!-- 1층: 문양 콤보 -->
+    <div class="combo-section-label">1층 — 문양(타입) 조합</div>
+    <div class="combo-grid">
+
+        <div class="combo-card">
+            <div class="combo-card-name">
+                💥 폭렬 삼연격
+                <span class="badge-multi badge-atk">TRIPLE ATK</span>
+            </div>
+            <div class="combo-card-dice">
+                <span class="pip pip-atk">⚔</span>
+                <span class="pip pip-atk">⚔</span>
+                <span class="pip pip-atk">⚔</span>
+            </div>
+            <div class="combo-effect">
+                공격 주사위 3개<br>
+                <strong>공격 배율 ×2.0</strong> — 가장 높은 화력
+            </div>
+        </div>
+
+        <div class="combo-card">
+            <div class="combo-card-name">
+                🛡️ 절대방어 가드
+                <span class="badge-multi badge-def">IRON WALL</span>
+            </div>
+            <div class="combo-card-dice">
+                <span class="pip pip-def">🛡</span>
+                <span class="pip pip-def">🛡</span>
+                <span class="pip pip-def">🛡</span>
+            </div>
+            <div class="combo-effect">
+                방어 주사위 3개<br>
+                <strong>방어 배율 ×2.0</strong> — 철벽 생존 특화
+            </div>
+        </div>
+
+        <div class="combo-card">
+            <div class="combo-card-name">
+                🧪 삼라만상 하이브리드
+                <span class="badge-multi badge-spc">TRINITY</span>
+            </div>
+            <div class="combo-card-dice">
+                <span class="pip pip-atk">⚔</span>
+                <span class="pip pip-def">🛡</span>
+                <span class="pip pip-spc">🧪</span>
+            </div>
+            <div class="combo-effect">
+                공격+방어+특수 각 1개<br>
+                <strong>공격 ×1.3 &amp; 방어 ×1.3</strong> + 특수 힐<br>
+                균형형 만능 콤보
+            </div>
+        </div>
+
+        <div class="combo-card">
+            <div class="combo-card-name">
+                ⚠️ 뇌정지 (실패)
+                <span class="badge-multi badge-fail" style="background:#1c1c1c;color:#555;">FAIL</span>
+            </div>
+            <div class="combo-card-dice">
+                <span class="pip pip-any">?</span>
+                <span class="pip pip-any">?</span>
+                <span class="pip pip-fail">✕</span>
+            </div>
+            <div class="combo-effect">
+                시간 내 슬롯 미완성 시 자동 발동<br>
+                빈 칸은 <strong>0</strong>으로 처리, 배율 없음
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 특수 주사위 개수 효과 -->
+    <div class="combo-section-label">특수(🧪) 개수 효과 — 위 콤보와 무관하게 적용</div>
+    <div class="combo-card" style="margin-bottom:14px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <div>
+            <div class="combo-card-dice" style="margin-bottom:0;">
+                <span class="pip pip-spc">🧪</span><span style="color:#555; font-size:12px; margin:auto 2px;">×n</span>
+            </div>
+        </div>
+        <div class="combo-effect" style="flex:1;">
+            특수 주사위 1개당 <strong>HP +3 회복</strong> (basePower > 0 조건)<br>
+            3개면 최대 +9 힐 / TRINITY 콤보와 조합 시 공방 강화 동시 가능
+        </div>
+    </div>
+
+    <!-- 2층: 숫자 관계 -->
+    <div class="combo-section-label">2층 — 숫자 관계 보너스 (1층과 중첩 가능!)</div>
+    <div class="num-grid">
+
+        <div class="num-card">
+            <div class="combo-card-name" style="color:#5dade2;">★ 스트레이트</div>
+            <div class="num-example">
+                <span class="pip-n">N</span>
+                <span class="pip-n">N+1</span>
+                <span class="pip-n">N+2</span>
+            </div>
+            <div class="combo-effect">
+                정렬 시 연속한 3숫자<br>
+                예: <strong>2·3·4</strong> / <strong>4·5·6</strong><br>
+                <strong>공격&amp;방어 배율 ×1.5</strong> 추가 곱산
+            </div>
+        </div>
+
+        <div class="num-card">
+            <div class="combo-card-name" style="color:#c39bd3;">⚡ 잭팟 (합=7 or 17)</div>
+            <div class="num-example">
+                <span class="pip-n jackpot">?</span>
+                <span class="pip-n jackpot">?</span>
+                <span class="pip-n jackpot">?</span>
+                <span style="color:#9b59b6; font-size:12px; margin:auto 0 auto 4px;">합=7 or 17</span>
+            </div>
+            <div class="combo-effect">
+                3개 눈 합이 정확히 <strong>7</strong> 또는 <strong>17</strong><br>
+                <strong>공격 배율 ×2.0 추가</strong> + <strong>보스 기절</strong><br>
+                기절 시 보스 공격 완전 무효
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 중첩 조합 랭킹 -->
+    <div class="overlap-section">
+        <div class="combo-section-label">최강 중첩 조합 랭킹 (공격 배율 기준)</div>
+        <table class="overlap-table">
+            <thead>
+                <tr>
+                    <th>랭크</th>
+                    <th>조합</th>
+                    <th>공격배율</th>
+                    <th>조건</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="rank-s">S</td>
+                    <td>💥 폭렬삼연격 + ⚡ 잭팟</td>
+                    <td class="mult">×4.0</td>
+                    <td>공×3 &amp; 합=7 or 17 + 보스 기절</td>
+                </tr>
+                <tr>
+                    <td class="rank-s">S</td>
+                    <td>💥 폭렬삼연격 + ★ 스트레이트 + ⚡ 잭팟</td>
+                    <td class="mult">×6.0</td>
+                    <td>공×3, 연속숫자, 합=7/17 — 이론상 최대</td>
+                </tr>
+                <tr>
+                    <td class="rank-a">A</td>
+                    <td>💥 폭렬삼연격 + ★ 스트레이트</td>
+                    <td class="mult">×3.0</td>
+                    <td>공×3 &amp; 연속 3숫자</td>
+                </tr>
+                <tr>
+                    <td class="rank-a">A</td>
+                    <td>🧪 TRINITY + ⚡ 잭팟</td>
+                    <td class="mult">×2.6</td>
+                    <td>공+방+특 &amp; 합=7/17 + 보스 기절 + 힐</td>
+                </tr>
+                <tr>
+                    <td class="rank-b">B</td>
+                    <td>💥 폭렬삼연격</td>
+                    <td class="mult">×2.0</td>
+                    <td>공×3</td>
+                </tr>
+                <tr>
+                    <td class="rank-b">B</td>
+                    <td>⚡ 잭팟 단독</td>
+                    <td class="mult">×2.0</td>
+                    <td>합=7 or 17 + 보스 기절</td>
+                </tr>
+                <tr>
+                    <td class="rank-b">B</td>
+                    <td>🧪 TRINITY + ★ 스트레이트</td>
+                    <td class="mult">×1.95</td>
+                    <td>공+방+특 &amp; 연속숫자 + 힐</td>
+                </tr>
+                <tr>
+                    <td class="rank-c">C</td>
+                    <td>🛡️ 절대방어 + ★ 스트레이트</td>
+                    <td class="mult">—</td>
+                    <td>방어×2.0 × 1.5 = 피해 경감 최강</td>
+                </tr>
+                <tr>
+                    <td class="rank-c">C</td>
+                    <td>일반 행동</td>
+                    <td class="mult">×1.0</td>
+                    <td>콤보 없음, 기본 공방만</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 데미지 공식 -->
+    <div class="formula-box">
+        <div class="formula-label">데미지 계산 공식</div>
+        <code>basePower</code> = 슬롯 3개 눈의 합<br>
+        <code>playerAttack</code> = floor( basePower × (공격수×0.4 + 0.5) × dmgMult )<br>
+        <code>playerDefense</code> = floor( basePower × (방어수×0.5) × guardMult )<br>
+        보스 공격 시: <code>내 피해 = max(0, 보스ATK − playerDefense)</code><br>
+        보스 방어 시: <code>보스 피해 = max(0, playerAttack − 보스DEF)</code>
+    </div>
+
+</div><!-- /combo-ref -->
+
+
+<script>
+    // 상태 변수
+    let playerHp = 100;
+    const maxPlayerHp = 100;
+    let enemyHp = 120;
+    const maxEnemyHp = 120;
+    
+    let currentEnemyAction = { type: '공격', value: 15 };
+    let dicePoolData = [];
+    let selectedSlots = [null, null, null];
+    
+    let turnActive = false;
+    let timerInterval = null;
+    let timeLimit = 4000;
+    let timeRemaining = 4000;
+
+    const icons = { '공격': '⚔️', '방어': '🛡️', '특수': '🧪' };
+
+    function startNewTurn() {
+        if (turnActive) return;
+        turnActive = true;
+        document.getElementById('actionBtn').disabled = true;
+        
+        selectedSlots = [null, null, null];
+        updateSlotsUi();
+
+        const enemyTypes = ['공격', '방어'];
+        const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+        const randomVal = Math.floor(Math.random() * 11) + 10;
+        currentEnemyAction = { type: randomType, value: randomVal };
+        
+        const intentBox = document.getElementById('enemyIntentBox');
+        if (randomType === '공격') {
+            intentBox.innerHTML = `⚠️ 보스의 행동 예고: <span class="intent-badge intent-attack">💥 강력 공격 [위력 ${randomVal}]</span>`;
+        } else {
+            intentBox.innerHTML = `⚠️ 보스의 행동 예고: <span class="intent-badge intent-defend">🛡️ 철벽 가드 [위력 ${randomVal}]</span>`;
+        }
+
+        const types = ['공격', '방어', '특수'];
+        dicePoolData = [];
+        for (let i = 0; i < 5; i++) {
+            dicePoolData.push({
+                id: i,
+                type: types[Math.floor(Math.random() * types.length)],
+                value: Math.floor(Math.random() * 6) + 1,
+                used: false
+            });
+        }
+        renderDicePool();
+        document.getElementById('clashDisplay').innerText = "⏱️ 콤보 조립 중...!!";
+        document.getElementById('clashDisplay').style.color = "#f1c40f";
+
+        timeRemaining = timeLimit;
+        const startTime = Date.now();
+        document.getElementById('timerBar').style.width = '100%';
+        
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            let elapsed = Date.now() - startTime;
+            timeRemaining = timeLimit - elapsed;
+            let percent = (timeRemaining / timeLimit) * 100;
+            
+            if (percent <= 0) {
+                percent = 0;
+                clearInterval(timerInterval);
+                executeClash();
+            }
+            document.getElementById('timerBar').style.width = percent + '%';
+        }, 50);
+    }
+
+    function renderDicePool() {
+        const poolEl = document.getElementById('dicePool');
+        poolEl.innerHTML = '';
+        dicePoolData.forEach(dice => {
+            const diceEl = document.createElement('div');
+            diceEl.className = `dice dice-${dice.type} ${dice.used ? 'selected' : ''}`;
+            diceEl.innerHTML = `
+                <span class="dice-icon">${icons[dice.type]}</span>
+                <span class="dice-val">${dice.value}</span>
+            `;
+            diceEl.onclick = () => selectDice(dice);
+            poolEl.appendChild(diceEl);
+        });
+    }
+
+    function selectDice(dice) {
+        if (!turnActive || dice.used) return;
+        
+        const emptyIdx = selectedSlots.findIndex(s => s === null);
+        if (emptyIdx !== -1) {
+            selectedSlots[emptyIdx] = dice;
+            dice.used = true;
+            renderDicePool();
+            updateSlotsUi();
+            
+            if (selectedSlots.every(s => s !== null)) {
+                clearInterval(timerInterval);
+                document.getElementById('timerBar').style.width = '0%';
+                executeClash();
+            }
+        }
+    }
+
+    function clearSlot(idx) {
+        if (!turnActive || selectedSlots[idx] === null) return;
+        const diceId = selectedSlots[idx].id;
+        const poolDice = dicePoolData.find(d => d.id === diceId);
+        if (poolDice) poolDice.used = false;
+        
+        selectedSlots[idx] = null;
+        renderDicePool();
+        updateSlotsUi();
+    }
+
+    function updateSlotsUi() {
+        for (let i = 0; i < 3; i++) {
+            const slotEl = document.getElementById(`slot${i}`);
+            const data = selectedSlots[i];
+            if (data) {
+                slotEl.style.backgroundColor = getStanceColor(data.type);
+                slotEl.style.borderColor = "#fff";
+                slotEl.querySelector('.slot-icon').innerText = icons[data.type];
+                slotEl.querySelector('.slot-num').innerText = data.value;
+            } else {
+                slotEl.style.backgroundColor = '#1a1a1a';
+                slotEl.style.borderColor = '#555';
+                slotEl.querySelector('.slot-icon').innerText = '?';
+                slotEl.querySelector('.slot-num').innerText = '-';
+            }
+        }
+    }
+
+    function getStanceColor(type) {
+        if (type === '공격') return '#c0392b';
+        if (type === '방어') return '#2980b9';
+        return '#d35400';
+    }
+
+    function executeClash() {
+        turnActive = false;
+        
+        const validSlots = selectedSlots.map(s => s ? s : { type: '❌실패', value: 0 });
+        
+        addLog(`=== ⚔️ 공방 정산 개시! ===`, 'system');
+        
+        let basePower = validSlots.reduce((acc, cur) => acc + cur.value, 0);
+        
+        let comboName = "일반 행동";
+        let dmgMultiplier = 1.0;
+        let guardMultiplier = 1.0;
+        let isStunned = false;
+
+        const types = validSlots.map(s => s.type);
+        
+        if (types.every(t => t === '공격')) {
+            comboName = "💥 폭렬 삼연격 (Triple Attack)";
+            dmgMultiplier = 2.0;
+        } else if (types.every(t => t === '방어')) {
+            comboName = "🛡️ 절대방어 가드 (Iron Wall)";
+            guardMultiplier = 2.0;
+        } else if (types.includes('공격') && types.includes('방어') && types.includes('특수')) {
+            comboName = "🧪 삼라만상 하이브리드 (Trinity)";
+            dmgMultiplier = 1.3;
+            guardMultiplier = 1.3;
+        } else if (types.filter(t => t === '❌실패').length > 0) {
+            comboName = "⚠️ 타임오퍼레이션 실패 (뇌정지)";
+        }
+
+        let numBonusText = "";
+        const nums = validSlots.map(s => s.value).sort((a,b)=>a-b);
+        
+        if (nums[0] > 0 && nums[1] === nums[0] + 1 && nums[2] === nums[1] + 1) {
+            numBonusText += " [★스트레이트 치명타!]";
+            dmgMultiplier *= 1.5;
+            guardMultiplier *= 1.5;
+        }
+        
+        if (basePower === 7 || basePower === 17) {
+            numBonusText += " [⚡JACKPOT 777: 보스 기절!]";
+            isStunned = true;
+            dmgMultiplier *= 2.0;
+        }
+
+        let attackCount = types.filter(t => t === '공격').length;
+        let defendCount = types.filter(t => t === '방어').length;
+        let specialCount = types.filter(t => t === '특수').length;
+
+        let playerFinalAttack = Math.floor((basePower * (attackCount * 0.4 + 0.5)) * dmgMultiplier);
+        let playerFinalDefense = Math.floor((basePower * (defendCount * 0.5)) * guardMultiplier);
+        
+        if (specialCount > 0 && basePower > 0) {
+            let healAmount = specialCount * 3;
+            playerHp = Math.min(maxPlayerHp, playerHp + healAmount);
+            addLog(`🧪 [특수 효과] 생명력 유도 작동: 플레이어 HP +${healAmount} 회복`, 'p-turn');
+        }
+
+        if (comboName !== "일반 행동") {
+            addLog(`✨ 콤보 발동: ${comboName}${numBonusText}`, 'combo');
+        }
+
+        const display = document.getElementById('clashDisplay');
+        display.innerText = "💥 슉! 슉! 탕! (콤보 연타 연출 중...)";
+        display.style.color = "#ff4757";
+
+        setTimeout(() => {
+            let damageToEnemy = playerFinalAttack;
+            let damageToPlayer = 0;
+
+            if (isStunned) {
+                damageToPlayer = 0;
+                addLog(`💤 보스가 잭팟 기절 상태에 빠져 공격하지 못했습니다!`, 'combo');
+            } else {
+                if (currentEnemyAction.type === '공격') {
+                    damageToPlayer = Math.max(0, currentEnemyAction.value - playerFinalDefense);
+                    addLog(`🛡️ 보스의 공격(${currentEnemyAction.value})을 방어력(${playerFinalDefense})으로 감쇄했습니다.`, 'p-turn');
+                } else {
+                    damageToEnemy = Math.max(0, playerFinalAttack - currentEnemyAction.value);
+                    addLog(`🛡️ 보스가 방어 태세(${currentEnemyAction.value})를 취해 내 공격이 경감되었습니다.`, 'e-turn');
+                }
+            }
+
+            playerHp = Math.max(0, playerHp - damageToPlayer);
+            enemyHp = Math.max(0, enemyHp - damageToEnemy);
+
+            if (damageToEnemy > 0) addLog(`⚔️ 플레이어의 스킬 연사! 보스에게 [${damageToEnemy}]의 대미지!`, 'p-turn');
+            if (damageToPlayer > 0) addLog(`💥 보스의 반격 격돌! 플레이어 [${damageToPlayer}]의 피해 감내!`, 'e-turn');
+
+            display.innerText = `⚔️ 이번 합 결과: 몬스터 -${damageToEnemy} / 나 -${damageToPlayer}`;
+            display.style.color = "#2ecc71";
+
+            updateUi();
+            checkGameOver();
+            
+            document.getElementById('actionBtn').disabled = false;
+        }, 1000);
+    }
+
+    function checkGameOver() {
+        if (enemyHp <= 0) {
+            alert("🎉 축하합니다! 완벽한 스킬 콤보 조립으로 보스를 격파했습니다!");
+            resetGame();
+        } else if (playerHp <= 0) {
+            alert("💀 사망했습니다... 타임어택의 압박을 이겨내고 더 좋은 족보를 짜보세요.");
+            resetGame();
+        }
+    }
+
+    function updateUi() {
+        document.getElementById('playerHpText').innerText = `HP: ${playerHp}/${maxPlayerHp}`;
+        document.getElementById('enemyHpText').innerText = `HP: ${enemyHp}/${maxEnemyHp}`;
+        document.getElementById('playerHpFill').style.width = (playerHp / maxPlayerHp * 100) + '%';
+        document.getElementById('enemyHpFill').style.width = (enemyHp / maxEnemyHp * 100) + '%';
+    }
+
+    function addLog(message, type) {
+        const logPanel = document.getElementById('logPanel');
+        const entry = document.createElement('div');
+        entry.className = `log-entry log-${type}`;
+        entry.innerText = message;
+        logPanel.appendChild(entry);
+        logPanel.scrollTop = logPanel.scrollHeight;
+    }
+
+    function resetGame() {
+        playerHp = maxPlayerHp;
+        enemyHp = maxEnemyHp;
+        turnActive = false;
+        clearInterval(timerInterval);
+        document.getElementById('timerBar').style.width = '0%';
+        document.getElementById('actionBtn').disabled = false;
+        document.getElementById('slot0').innerHTML = '<span class="slot-icon">?</span><span class="slot-num">-</span>';
+        document.getElementById('slot1').innerHTML = '<span class="slot-icon">?</span><span class="slot-num">-</span>';
+        document.getElementById('slot2').innerHTML = '<span class="slot-icon">?</span><span class="slot-num">-</span>';
+        updateUi();
+        document.getElementById('clashDisplay').innerText = "READY...";
+        document.getElementById('clashDisplay').style.color = "#f1c40f";
+        document.getElementById('logPanel').innerHTML = '<div class="log-entry log-system">전투가 리셋되었습니다. 다음 턴을 준비하세요!</div>';
+    }
+</script>
+
+</body>
+</html>
