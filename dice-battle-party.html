@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Roll the Dice - 5개 주사위 족보 테스트 베드</title>
+    <style>
+        body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; background: #121212; color: white; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
+        .game-screen { max-width: 450px; width: 100%; background: #1e1e1e; border: 4px solid #333; border-radius: 15px; padding: 15px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .boss-area { width: 100%; background: #2c2c2c; border-radius: 10px; padding: 12px; text-align: center; margin-bottom: 15px; border: 1px solid #444; }
+        .boss-name { font-size: 18px; font-weight: bold; color: #ff5e57; letter-spacing: 0.5px; }
+        .boss-antic { background: #ffa801; color: black; font-weight: bold; padding: 6px 12px; border-radius: 5px; margin: 8px 0 0 0; display: inline-block; font-size: 13px; animation: blink 1.2s infinite; }
+        .status-bars { width: 100%; display: flex; justify-content: space-between; margin: 10px 0 15px 0; font-size: 12px; }
+        .hp-bar-container { width: 46%; background: #333; border-radius: 5px; height: 18px; overflow: hidden; position: relative; border: 1px solid #555; }
+        .hp-bar { height: 100%; width: 100%; transition: width 0.4s ease; }
+        .player-hp { background: #05c46b; }
+        .boss-hp { background: #ff5e57; }
+        .hp-text { position: absolute; width: 100%; text-align: center; top: 1px; font-weight: bold; font-size: 11px; color: white; text-shadow: 1px 1px 2px black; }
+        .battle-animate-zone { width: 100%; min-height: 55px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: #0be881; text-align: center; margin-bottom: 15px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px dashed #444; box-sizing: border-box; }
+        .combination-badge { font-size: 18px; color: #ffd32a; margin-bottom: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .slots-area { width: 100%; text-align: center; background: #252525; padding: 12px; border-radius: 10px; border: 1px solid #333; margin-bottom: 15px; }
+        .slot-title { font-size: 12px; color: #aaa; margin-bottom: 8px; letter-spacing: 0.5px; }
+        .slots { display: flex; justify-content: center; gap: 12px; min-height: 55px; margin-bottom: 15px; }
+        .slot { width: 55px; height: 55px; border: 2px dashed #555; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; background: #1a1a1a; transition: all 0.2s; }
+        .dice-pool-container { width: 100%; background: #1a1a1a; padding: 15px 10px; border-radius: 8px; border: 1px solid #2d2d2d; margin-bottom: 10px; }
+        .dice-pool { display: flex; justify-content: center; gap: 10px; min-height: 55px; flex-wrap: wrap; }
+        .dice { width: 55px; height: 55px; background: #e74c3c; color: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; cursor: pointer; box-shadow: 0 5px 0 #c0392b; transition: all 0.1s ease; border: 1px solid rgba(255,255,255,0.1); }
+        .dice:hover { filter: brightness(1.1); }
+        .dice:active { transform: translateY(5px); box-shadow: none; }
+        .dice.selected { opacity: 0.25; cursor: default; transform: translateY(5px); box-shadow: none; filter: grayscale(0.5); }
+        .roll-buttons { display: flex; justify-content: space-around; width: 100%; margin-top: 5px; border-top: 2px solid #2d2d2d; padding-top: 15px; }
+        .btn-roll { width: 85px; height: 85px; border-radius: 50%; border: none; font-weight: bold; color: white; cursor: pointer; font-size: 13px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 6px 0 rgba(0,0,0,0.5); transition: all 0.1s; }
+        .btn-roll:active { transform: translateY(6px); box-shadow: none; }
+        .btn-defend { background: #2e86de; border: 2px solid #48dbfb; }
+        .btn-attack { background: #ff5252; border: 2px solid #ff7675; }
+        .btn-special { background: #10ac84; border: 2px solid #1dd1a1; }
+        .btn-icon { font-size: 20px; margin-bottom: 2px; }
+        .cheat-sheet { width: 100%; margin-top: 15px; background: #252525; padding: 10px; border-radius: 8px; font-size: 11px; color: #ccc; border: 1px solid #333; }
+        .cheat-sheet-title { font-weight: bold; color: #ffd32a; margin-bottom: 4px; text-align: center; }
+        .cheat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    </style>
+</head>
+<body>
+
+<div class="game-screen">
+    <div class="boss-area">
+        <div class="boss-name">👑 무리의 왕: 랫킹 (RAT KING)</div>
+        <div class="boss-antic" id="bossAntic">⚠️ 랫킹이 강공을 준비한다! (3연타)</div>
+    </div>
+
+    <div class="status-bars">
+        <div>플레이어 파티 HP
+            <div class="hp-bar-container">
+                <div id="playerHpBar" class="hp-bar player-hp"></div>
+                <div id="playerHpText" class="hp-text">100 / 100</div>
+            </div>
+        </div>
+        <div style="text-align: right;">랫킹 HP
+            <div class="hp-bar-container">
+                <div id="bossHpBar" class="hp-bar boss-hp"></div>
+                <div id="bossHpText" class="hp-text">150 / 150</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="battle-animate-zone" id="animateZone">
+        <div id="comboResult" class="combination-badge">READY</div>
+        <div id="actionNarrative">하단의 공격/방어/특수 버튼을 눌러 실제 주사위를 굴려보세요!</div>
+    </div>
+
+    <div class="slots-area">
+        <div class="slot-title" id="slotStatus">조합 슬롯 (주사위를 순서대로 3개 선택하세요)</div>
+        <div class="slots">
+            <div class="slot" id="slot0"></div>
+            <div class="slot" id="slot1"></div>
+            <div class="slot" id="slot2"></div>
+        </div>
+    </div>
+
+    <div class="dice-pool-container">
+        <div class="dice-pool" id="dicePool">
+            <div style="color: #666; font-size: 13px; margin: auto;">주사위가 비어있습니다.</div>
+        </div>
+    </div>
+
+    <div class="roll-buttons">
+        <button class="btn-roll btn-attack" onclick="rollFiveDices('attack', '#ff5252')">
+            <span class="btn-icon">⚔️</span><span>공격용</span>
+        </button>
+        <button class="btn-roll btn-defend" onclick="rollFiveDices('defend', '#2e86de')">
+            <span class="btn-icon">🛡️</span><span>방어용</span>
+        </button>
+        <button class="btn-roll btn-special" onclick="rollFiveDices('special', '#10ac84')">
+            <span class="btn-icon">🔱</span><span>특수용</span>
+        </button>
+    </div>
+
+    <div class="cheat-sheet">
+        <div class="cheat-sheet-title">📜 주사위 조합 족보 규칙 가이드</div>
+        <div class="cheat-grid">
+            <div>• <b>트리플 (Triple):</b> 세 눈이 모두 같음</div>
+            <div>• <b>스트레이트 (Straight):</b> 연속된 세 숫자</div>
+            <div>• <b>원 페어 (One Pair):</b> 두 눈이 같음</div>
+            <div>• <b>노 페어 (No Pair):</b> 족보 없음, 수치 합산 적용</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let playerHp = 100; let bossHp = 150; let dicePoolValues = []; let selectedIndices = []; let activeRollType = ''; let currentDiceColor = '#ff5252';
+
+    function rollFiveDices(type, color) {
+        activeRollType = type; currentDiceColor = color; selectedIndices = [];
+        dicePoolValues = Array.from({length: 5}, () => Math.floor(Math.random() * 6) + 1);
+        let typeText = type === 'attack' ? '🔴 공격용(딜러)' : type === 'defend' ? '🔵 방어용(탱커)' : '🟢 특수용(캐스터)';
+        document.getElementById('slotStatus').innerText = `${typeText} 주사위 5개 중 3개를 순서대로 터치하세요!`;
+        document.getElementById('comboResult').innerText = "ROLLING...";
+        document.getElementById('comboResult').style.color = "#ffd32a";
+        document.getElementById('actionNarrative').innerText = "어떤 주사위를 골라 콤보를 만드시겠습니까?";
+        renderGame();
+    }
+
+    function selectDiceFromPool(index) {
+        if (dicePoolValues.length === 0 || selectedIndices.length >= 3 || selectedIndices.includes(index)) return;
+        selectedIndices.push(index); renderGame();
+        if (selectedIndices.length === 3) { evaluateDiceCombination(); }
+    }
+
+    function renderGame() {
+        const poolEl = document.getElementById('dicePool'); poolEl.innerHTML = '';
+        dicePoolValues.forEach((val, idx) => {
+            const diceDiv = document.createElement('div');
+            diceDiv.className = `dice ${selectedIndices.includes(idx) ? 'selected' : ''}`;
+            diceDiv.style.background = currentDiceColor;
+            diceDiv.style.boxShadow = selectedIndices.includes(idx) ? 'none' : `0 5px 0 ${getDarkenedColor(currentDiceColor)}`;
+            diceDiv.innerText = val; diceDiv.onclick = () => selectDiceFromPool(idx);
+            poolEl.appendChild(diceDiv);
+        });
+        for (let i = 0; i < 3; i++) {
+            const slotEl = document.getElementById(`slot${i}`);
+            if (selectedIndices[i] !== undefined) {
+                slotEl.innerText = dicePoolValues[selectedIndices[i]];
+                slotEl.style.color = currentDiceColor; slotEl.style.borderColor = currentDiceColor;
+            } else {
+                slotEl.innerText = ''; slotEl.style.borderColor = '#555';
+            }
+        }
+    }
+
+    function evaluateDiceCombination() {
+        const pickedValues = selectedIndices.map(i => dicePoolValues[i]);
+        const sortedValues = [...pickedValues].sort((a, b) => a - b);
+        const comboResultEl = document.getElementById('comboResult');
+        const actionNarrativeEl = document.getElementById('actionNarrative');
+
+        let isTriple = (pickedValues[0] === pickedValues[1] && pickedValues[1] === pickedValues[2]);
+        let isStraight = (sortedValues[1] === sortedValues[0] + 1 && sortedValues[2] === sortedValues[1] + 1);
+        let isOnePair = (pickedValues[0] === pickedValues[1] || pickedValues[1] === pickedValues[2] || pickedValues[0] === pickedValues[2]);
+
+        let combinationName = "노 페어 (No Pair)"; let scoreMultiplier = 1.0;
+        if (isTriple) { combinationName = "🔥 트리플 (Triple)!"; scoreMultiplier = 3.0; comboResultEl.style.color = "#ff3838"; }
+        else if (isStraight) { combinationName = "⚡ 스트레이트 (Straight)!"; scoreMultiplier = 2.0; comboResultEl.style.color = "#ff9f43"; }
+        else if (isOnePair) { combinationName = "✨ 원 페어 (One Pair)"; scoreMultiplier = 1.2; comboResultEl.style.color = "#fff200"; }
+        else { comboResultEl.style.color = "#ffffff"; }
+        comboResultEl.innerText = combinationName;
+
+        let baseValueSum = pickedValues.reduce((a, b) => a + b, 0);
+        let totalEffectValue = Math.floor(baseValueSum * scoreMultiplier);
+        let bossDamage = 0; let playerDamage = 20; let systemNarrative = "";
+
+        if (activeRollType === 'attack') {
+            bossDamage = totalEffectValue;
+            if (isTriple) { playerDamage = 0; systemNarrative = `딜러 출격! 트리플 위력으로 랫킹을 기절시키고 무력화! [적에게 ${bossDamage} 대미지]`; }
+            else if (isStraight) { playerDamage = Math.floor(playerDamage * 0.5); systemNarrative = `스케치 재현! 스트레이트 효과로 랫킹 강공 회피(50% 감쇄) 후 카운터 역습! [적에게 ${bossDamage} 대미지 / 내 피해 ${playerDamage}]`; }
+            else { systemNarrative = `패턴 실패! 강공 대미지를 정면으로 받으며 처절하게 공격을 주고받습니다! [적에게 ${bossDamage} 대미지 / 내 피해 ${playerDamage}]`; }
+        } else if (activeRollType === 'defend') {
+            let defenseWall = totalEffectValue; playerDamage = Math.max(0, playerDamage - defenseWall);
+            if (isTriple || isStraight) { bossDamage = Math.floor(defenseWall * 0.5); systemNarrative = `탱커 전면 배치! 완벽한 방벽으로 적 공격 무력화 후 실드 밀치기 반격! [적에게 ${bossDamage} 대미지 / 내 피해 ${playerDamage}]`; }
+            else { systemNarrative = `탱커가 방패를 들어 랫킹의 강공 위력을 경감시켰습니다. [내 피해 ${playerDamage}]`; }
+        } else if (activeRollType === 'special') {
+            let healValue = totalEffectValue; playerHp = Math.min(100, playerHp + healValue);
+            systemNarrative = `캐스터 마법 발동! 주사위 마나 에너지를 모아 파티의 체력을 [${healValue}] 회복하고 강공을 버텼습니다! [내 피해 ${playerDamage}]`;
+        }
+
+        playerHp = Math.max(0, playerHp - playerDamage); bossHp = Math.max(0, bossHp - bossDamage);
+        actionNarrativeEl.innerText = systemNarrative;
+        document.getElementById('playerHpBar').style.width = playerHp + "%";
+        document.getElementById('playerHpText').innerText = `${playerHp} / 100`;
+        document.getElementById('bossHpBar').style.width = (bossHp / 1.5) + "%";
+        document.getElementById('bossHpText').innerText = `${bossHp} / 150`;
+
+        const anticEl = document.getElementById('bossAntic');
+        if (bossHp > 0 && playerHp > 0) {
+            const patterns = ["⚠️ 랫킹이 전열을 정비하며 방어 포즈를 취합니다.", "⚡ 랫킹이 취약 상태에 빠져 빈틈을 보입니다!", "⚠️ 랫킹이 다시 독액 강공격을 충전합니다!"];
+            anticEl.innerText = patterns[Math.floor(Math.random() * patterns.length)];
+        }
+        setTimeout(() => {
+            if (bossHp <= 0) { alert("🎉 던전 클리어! 랫킹을 무찌르고 전리품을 루팅했습니다!"); triggerFullReset(); }
+            else if (playerHp <= 0) { alert("💀 파티 전멸... 마을로 돌아가 회복 루틴을 수행해야 합니다."); triggerFullReset(); }
+        }, 600);
+    }
+
+    function triggerFullReset() {
+        playerHp = 100; bossHp = 150; dicePoolValues = []; selectedIndices = [];
+        document.getElementById('playerHpBar').style.width = "100%"; document.getElementById('bossHpBar').style.width = "100%";
+        document.getElementById('playerHpText').innerText = "100 / 100"; document.getElementById('bossHpText').innerText = "150 / 150";
+        document.getElementById('comboResult').innerText = "READY"; document.getElementById('comboResult').style.color = "#ffd32a";
+        document.getElementById('actionNarrative').innerText = "하단의 공격/방어/특수 버튼을 눌러 실제 주사위를 굴려보세요!";
+        document.getElementById('bossAntic').innerText = "⚠️ 랫킹이 강공을 준비한다! (3연타)";
+        document.getElementById('dicePool').innerHTML = '<div style="color: #666; font-size: 13px; margin: auto;">주사위가 비어있습니다.</div>';
+        renderGame();
+    }
+
+    function getDarkenedColor(col) { if(col === '#ff5252') return '#c0392b'; if(col === '#2e86de') return '#1b4f72'; return '#0b5345'; }
+</script>
+</body>
+</html>
